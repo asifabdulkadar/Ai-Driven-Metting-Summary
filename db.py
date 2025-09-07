@@ -6,7 +6,10 @@ from datetime import datetime
 from typing import List, Dict, Optional
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from bson import ObjectId
 import logging
+import streamlit as st
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,27 +19,48 @@ class DatabaseManager:
     """Handles all MongoDB operations for the meeting summarizer"""
     
     def __init__(self):
-        """Initialize database connection"""
-        self.mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
-        self.database_name = os.getenv('DATABASE_NAME', 'meeting_summarizer')
+        """Initialize database manager without connecting"""
         self.client = None
         self.db = None
-        self._connect()
+        self.database_name = os.getenv('DATABASE_NAME', 'meeting_summarizer')
+        self._connected = False
     
-    def _connect(self):
+    def connect(self):
         """Establish connection to MongoDB"""
+        if self._connected:
+            return
+            
         try:
-            self.client = MongoClient(self.mongodb_uri, serverSelectionTimeoutMS=5000)
+            # Get MongoDB URI from Streamlit secrets
+            mongo_uri = st.secrets["mongo"]["uri"]
+            print(f"🔌 Testing connection to: {mongo_uri}")
+            logger.info("Using MongoDB URI from Streamlit secrets")
+        except (KeyError, AttributeError):
+            # Fallback to environment variable or localhost
+            mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
+            print(f"🔌 Testing connection to: {mongo_uri}")
+            logger.info("Using MongoDB URI from environment variable or localhost")
+        
+        try:
+            self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, tls=True)
             # Test connection
             self.client.admin.command('ping')
-            self.db = self.client[self.database_name]
-            logger.info(f"Connected to MongoDB: {self.database_name}")
+            self.db = self.client.get_default_database()
+            self._connected = True
+            print("✅ MongoDB Atlas connection successful!")
+            logger.info(f"✅ Successfully connected to MongoDB Atlas: {self.db.name}")
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
-            raise
+            logger.error(f"❌ Failed to connect to MongoDB: {e}")
+            logger.error(f"MongoDB URI being used: {mongo_uri}")
+            raise RuntimeError(f"❌ Could not connect to MongoDB: {e}")
+        except Exception as e:
+            logger.error(f"❌ Unexpected error connecting to MongoDB: {e}")
+            raise RuntimeError(f"❌ Could not connect to MongoDB: {e}")
     
     def get_collection(self, collection_name: str):
         """Get a collection from the database"""
+        if not self._connected:
+            raise RuntimeError("Database not connected. Call connect() first.")
         return self.db[collection_name]
     
     def save_transcript(self, transcript_data: Dict) -> str:
@@ -89,13 +113,21 @@ class DatabaseManager:
     
     def get_transcript(self, transcript_id: str) -> Optional[Dict]:
         """Get a transcript by ID"""
-        collection = self.get_collection('transcripts')
-        return collection.find_one({'_id': transcript_id})
+        try:
+            collection = self.get_collection('transcripts')
+            return collection.find_one({'_id': ObjectId(transcript_id)})
+        except Exception as e:
+            logger.error(f"Error getting transcript {transcript_id}: {e}")
+            return None
     
     def get_summary(self, summary_id: str) -> Optional[Dict]:
         """Get a summary by ID"""
-        collection = self.get_collection('summaries')
-        return collection.find_one({'_id': summary_id})
+        try:
+            collection = self.get_collection('summaries')
+            return collection.find_one({'_id': ObjectId(summary_id)})
+        except Exception as e:
+            logger.error(f"Error getting summary {summary_id}: {e}")
+            return None
     
     def get_all_tasks(self, status: Optional[str] = None) -> List[Dict]:
         """
@@ -127,12 +159,16 @@ class DatabaseManager:
         Returns:
             bool: True if update was successful
         """
-        collection = self.get_collection('tasks')
-        result = collection.update_one(
-            {'_id': task_id},
-            {'$set': {'status': status, 'updated_at': datetime.utcnow()}}
-        )
-        return result.modified_count > 0
+        try:
+            collection = self.get_collection('tasks')
+            result = collection.update_one(
+                {'_id': ObjectId(task_id)},
+                {'$set': {'status': status, 'updated_at': datetime.utcnow()}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Error updating task {task_id}: {e}")
+            return False
     
     def get_recent_meetings(self, limit: int = 10) -> List[Dict]:
         """Get recent meetings with their summaries"""
@@ -144,7 +180,7 @@ class DatabaseManager:
         try:
             # Delete transcript
             transcripts_collection = self.get_collection('transcripts')
-            transcripts_collection.delete_one({'_id': transcript_id})
+            transcripts_collection.delete_one({'_id': ObjectId(transcript_id)})
             
             # Delete related summaries
             summaries_collection = self.get_collection('summaries')

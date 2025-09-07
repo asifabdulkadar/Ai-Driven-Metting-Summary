@@ -25,6 +25,15 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize database connection
+db_manager = get_db_manager()
+try:
+    db_manager.connect()
+    st.session_state.db_connected = True
+except RuntimeError as e:
+    st.session_state.db_connected = False
+    st.session_state.db_error = str(e)
+
 # Page configuration
 st.set_page_config(
     page_title="AI-Driven Meeting Summarizer",
@@ -109,13 +118,15 @@ def check_system_status():
         'whisper': False
     }
     
-    try:
-        # Check MongoDB
-        db_manager = get_db_manager()
-        db_manager.get_database_stats()
-        status['mongodb'] = True
-    except Exception as e:
-        st.error(f"MongoDB connection failed: {e}")
+    # Check MongoDB connection status
+    if st.session_state.get('db_connected', False):
+        try:
+            db_manager.get_database_stats()
+            status['mongodb'] = True
+        except Exception as e:
+            st.error(f"MongoDB connection failed: {e}")
+    else:
+        st.error(f"MongoDB connection failed: {st.session_state.get('db_error', 'Unknown error')}")
     
     try:
         # Check Ollama
@@ -560,6 +571,19 @@ def main():
     
     # Header
     st.markdown('<div class="main-header">🤖 AI-Driven Meeting Summarizer</div>', unsafe_allow_html=True)
+    
+    # Database connection status
+    if not st.session_state.get('db_connected', False):
+        st.error(f"⚠️ **Database Connection Issue**: {st.session_state.get('db_error', 'Unknown error')}")
+        st.info("""
+        **To fix this issue:**
+        1. Set up MongoDB Atlas (free tier available)
+        2. Configure your connection string in Streamlit Cloud secrets
+        3. Ensure network access allows connections from anywhere (0.0.0.0/0)
+        
+        **For local development:** Make sure MongoDB is running locally.
+        """)
+        st.stop()
     
     # Sidebar navigation
     st.sidebar.title("🧭 Navigation")
