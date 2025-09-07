@@ -1,0 +1,139 @@
+AI-DRIVEN MEETING SUMMARIZER - DEMO VIDEO SCRIPT
+==================================================
+
+VIDEO DURATION: 3-5 minutes
+TARGET AUDIENCE: Technical evaluators and stakeholders
+
+SCRIPT OUTLINE:
+===============
+
+INTRODUCTION (30 seconds)
+=========================
+"Hello! I'm [Your Name], and I'm excited to present my AI-Driven Meeting Summarizer solution for Use Case [ID]. 
+
+Today, I'll demonstrate how this innovative application transforms lengthy meetings into actionable insights using cutting-edge AI technology. Let me walk you through the complete solution."
+
+PROBLEM STATEMENT (30 seconds)
+==============================
+"Every professional knows the challenge: hours spent in meetings, followed by manual note-taking and the struggle to extract actionable tasks. 
+
+My solution addresses this by:
+- Automatically transcribing audio/video meetings
+- Using AI to generate intelligent summaries
+- Extracting action items with assignees and deadlines
+- Providing an interactive dashboard for task management"
+
+TECHNICAL OVERVIEW (45 seconds)
+==============================
+"Let me show you the technical architecture:
+
+The system uses:
+- Python with Streamlit for the web interface
+- MongoDB for data storage
+- Ollama with Gemma:2b model for AI processing
+- Whisper for speech-to-text conversion
+- APScheduler for automated task reminders
+
+This creates a robust, scalable solution that processes meetings locally, ensuring data privacy."
+
+LIVE DEMO (2-3 minutes)
+=======================
+"Now, let's see it in action:
+
+[SCREEN RECORDING BEGINS]
+
+Step 1: File Upload
+- I'm uploading a sample meeting video file
+- The system automatically detects the format
+- Processing begins immediately
+
+Step 2: AI Processing
+- Whisper converts speech to text
+- Gemma:2b analyzes the content
+- AI extracts key points and action items
+- Tasks are automatically created with suggested deadlines
+
+Step 3: Dashboard Display
+- Clean, intuitive interface shows the meeting summary
+- Action items are clearly listed with assignees
+- Task management system tracks progress
+- Export options available for sharing
+
+Step 4: Export Functionality
+- Generate CSV reports for data analysis
+- Create PDF summaries for stakeholders
+- Download complete meeting reports
+
+[SCREEN RECORDING ENDS]
+
+As you can see, what traditionally takes hours of manual work is now completed in minutes with superior accuracy."
+
+KEY FEATURES HIGHLIGHT (30 seconds)
+===================================
+"The solution offers several unique advantages:
+
+- Multi-format support: handles text, audio, and video files
+- Local AI processing: ensures data privacy and security
+- Automated task scheduling: never miss a deadline again
+- Real-time processing: immediate results
+- Professional exports: ready-to-share reports"
+
+CONCLUSION (15 seconds)
+=======================
+"This AI-Driven Meeting Summarizer represents a significant leap forward in meeting productivity. It's not just a tool—it's a complete solution that transforms how organizations handle meetings.
+
+Thank you for watching, and I'm happy to answer any questions about the implementation or features."
+
+TECHNICAL DEMO CHECKLIST:
+=========================
+□ Clear screen recording setup
+□ Sample meeting file ready
+□ Application running smoothly
+□ All features demonstrated
+□ Export functionality shown
+□ Professional presentation style
+
+RECORDING TIPS:
+===============
+- Use high-quality screen recording software
+- Ensure good audio quality
+- Practice the demo flow beforehand
+- Have backup files ready
+- Keep transitions smooth
+- Maintain professional tone
+
+VISUAL ELEMENTS TO INCLUDE:
+===========================
+- Application interface screenshots
+- Processing status indicators
+- Generated summaries
+- Task management dashboard
+- Export options
+- System architecture diagram
+
+EVALUATION CRITERIA ADDRESSAL:
+=============================
+1. Relevance to Use Case: ✓ Directly addresses meeting productivity
+2. Creativity & Innovation: ✓ AI-powered automation with local processing
+3. Technical Implementation: ✓ Modern tech stack with robust architecture
+4. Clarity in Demo Video: ✓ Step-by-step walkthrough with clear explanations
+
+DEMO SCENARIOS TO PREPARE:
+==========================
+- Corporate meeting processing
+- Educational content analysis
+- Healthcare consultation review
+- Project planning session
+- Client presentation analysis
+
+BACKUP PLANS:
+=============
+- Pre-recorded demo segments
+- Screenshots of key features
+- Alternative file formats
+- Offline demonstration mode
+- Technical documentation ready
+
+================================================================
+END OF DEMO VIDEO SCRIPT
+================================================================

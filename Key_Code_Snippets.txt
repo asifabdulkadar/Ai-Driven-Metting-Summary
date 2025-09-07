@@ -1,0 +1,471 @@
+AI-DRIVEN MEETING SUMMARIZER - KEY CODE SNIPPETS
+==================================================
+
+This document contains the most important code snippets that demonstrate the technical implementation and innovation of the AI-Driven Meeting Summarizer.
+
+1. MAIN APPLICATION ENTRY POINT (app.py)
+==========================================
+
+```python
+import streamlit as st
+from ollama_nlp import get_nlp_processor
+from transcript_loader import get_transcript_loader
+from task_manager import get_task_manager
+from exports import get_export_manager
+from db import get_db_manager
+
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'current_summary' not in st.session_state:
+        st.session_state.current_summary = None
+    if 'current_tasks' not in st.session_state:
+        st.session_state.current_tasks = []
+    if 'processing_status' not in st.session_state:
+        st.session_state.processing_status = 'idle'
+
+def main():
+    """Main application function"""
+    st.set_page_config(
+        page_title="AI Meeting Summarizer",
+        page_icon="🤖",
+        layout="wide"
+    )
+    
+    initialize_session_state()
+    
+    # Sidebar navigation
+    page = st.sidebar.selectbox(
+        "Navigate",
+        ["🏠 Home", "📊 Dashboard", "📤 Export", "⚙️ Settings"]
+    )
+    
+    if page == "🏠 Home":
+        home_page()
+    elif page == "📊 Dashboard":
+        dashboard_page()
+    elif page == "📤 Export":
+        export_page()
+    elif page == "⚙️ Settings":
+        settings_page()
+
+if __name__ == "__main__":
+    main()
+```
+
+2. AI PROCESSING ENGINE (ollama_nlp.py)
+=======================================
+
+```python
+import ollama
+import json
+from typing import Dict, List, Optional
+
+class OllamaNLPProcessor:
+    """Handles AI processing using Ollama gemma:2b model"""
+    
+    def __init__(self):
+        self.model_name = "gemma:2b"
+        self.client = ollama.Client(host='http://localhost:11434')
+        self._ensure_model_available()
+    
+    def process_meeting(self, transcript: str) -> Dict:
+        """
+        Process meeting transcript and extract summary + action items
+        
+        Args:
+            transcript: Raw meeting transcript
+            
+        Returns:
+            Dictionary containing summary and action items
+        """
+        try:
+            # Truncate transcript if too long
+            if len(transcript) > 4000:
+                transcript = transcript[:4000]
+                logger.warning("Transcript truncated to 4000 characters")
+            
+            # Generate summary
+            summary_prompt = self._create_summary_prompt(transcript)
+            summary_response = self.client.chat(
+                model=self.model_name,
+                messages=[{"role": "user", "content": summary_prompt}]
+            )
+            
+            # Extract action items
+            action_prompt = self._create_action_items_prompt(transcript)
+            action_response = self.client.chat(
+                model=self.model_name,
+                messages=[{"role": "user", "content": action_prompt}]
+            )
+            
+            return {
+                'summary': summary_response['message']['content'],
+                'action_items': self._parse_action_items(action_response['message']['content'])
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing meeting: {e}")
+            raise
+    
+    def _create_summary_prompt(self, transcript: str) -> str:
+        """Create prompt for meeting summarization"""
+        return f"""
+        Please provide a comprehensive summary of the following meeting transcript:
+        
+        {transcript}
+        
+        Focus on:
+        - Key decisions made
+        - Important discussions
+        - Main topics covered
+        - Outcomes and next steps
+        
+        Provide a clear, structured summary.
+        """
+    
+    def _create_action_items_prompt(self, transcript: str) -> str:
+        """Create prompt for action item extraction"""
+        return f"""
+        Extract action items from this meeting transcript:
+        
+        {transcript}
+        
+        For each action item, identify:
+        - The task description
+        - Who is responsible (assignee)
+        - Suggested deadline
+        - Priority level
+        
+        Format as JSON with this structure:
+        {{
+            "action_items": [
+                {{
+                    "task": "Task description",
+                    "assignee": "Person responsible",
+                    "deadline": "Suggested deadline",
+                    "priority": "high/medium/low",
+                    "context": "Additional context"
+                }}
+            ]
+        }}
+        """
+```
+
+3. DATABASE MANAGEMENT (db.py)
+==============================
+
+```python
+from pymongo import MongoClient
+from bson import ObjectId
+from datetime import datetime
+from typing import Dict, List, Optional
+
+class DatabaseManager:
+    """Handles all MongoDB operations"""
+    
+    def __init__(self):
+        self.client = MongoClient('mongodb://localhost:27017/')
+        self.db = self.client['meeting_summarizer']
+    
+    def save_summary(self, summary_data: Dict) -> str:
+        """Save meeting summary to MongoDB"""
+        collection = self.db['summaries']
+        summary_data['created_at'] = datetime.utcnow()
+        result = collection.insert_one(summary_data)
+        logger.info(f"Saved summary with ID: {result.inserted_id}")
+        return str(result.inserted_id)
+    
+    def get_summary(self, summary_id: str) -> Optional[Dict]:
+        """Get a summary by ID with proper ObjectId handling"""
+        try:
+            collection = self.db['summaries']
+            return collection.find_one({'_id': ObjectId(summary_id)})
+        except Exception as e:
+            logger.error(f"Error getting summary {summary_id}: {e}")
+            return None
+    
+    def save_task(self, task_data: Dict) -> str:
+        """Save a task to MongoDB"""
+        collection = self.db['tasks']
+        task_data['created_at'] = datetime.utcnow()
+        result = collection.insert_one(task_data)
+        logger.info(f"Saved task with ID: {result.inserted_id}")
+        return str(result.inserted_id)
+    
+    def get_tasks_by_meeting(self, meeting_id: str) -> List[Dict]:
+        """Get all tasks for a specific meeting"""
+        collection = self.db['tasks']
+        return list(collection.find({'meeting_id': meeting_id}).sort('created_at', -1))
+```
+
+4. TASK MANAGEMENT SYSTEM (task_manager.py)
+=============================================
+
+```python
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+class TaskManager:
+    """Manages tasks, scheduling, and reminders"""
+    
+    def __init__(self):
+        self.db_manager = get_db_manager()
+        self.scheduler = BackgroundScheduler()
+        self.scheduler.start()
+        logger.info("Task scheduler started successfully")
+    
+    def create_task_from_action_item(self, action_item: Dict, meeting_id: str) -> str:
+        """Create a task from an action item"""
+        task_data = {
+            'task': action_item.get('task', ''),
+            'assignee': action_item.get('assignee', 'TBD'),
+            'priority': action_item.get('priority', 'medium'),
+            'deadline': action_item.get('deadline', ''),
+            'context': action_item.get('context', ''),
+            'status': 'pending',
+            'meeting_id': meeting_id,
+            'created_at': datetime.utcnow()
+        }
+        
+        task_id = self.db_manager.save_task(task_data)
+        self._schedule_task_reminders(task_id, task_data)
+        
+        logger.info(f"Created task: {task_id}")
+        return task_id
+    
+    def _schedule_task_reminders(self, task_id: str, task_data: Dict):
+        """Schedule reminders for a task"""
+        deadline_str = task_data.get('deadline')
+        if deadline_str:
+            try:
+                deadline = datetime.strptime(deadline_str, '%Y-%m-%d')
+                
+                # Schedule reminder 1 day before deadline
+                reminder_date = deadline - timedelta(days=1)
+                self.scheduler.add_job(
+                    self._send_task_reminder,
+                    DateTrigger(run_date=reminder_date),
+                    args=[task_id],
+                    id=f"reminder_{task_id}_1day"
+                )
+                
+                # Schedule overdue check
+                overdue_date = deadline + timedelta(days=1)
+                self.scheduler.add_job(
+                    self._check_overdue_tasks,
+                    DateTrigger(run_date=overdue_date),
+                    args=[task_id],
+                    id=f"overdue_{task_id}"
+                )
+                
+            except ValueError:
+                logger.warning(f"Invalid deadline format: {deadline_str}")
+    
+    def get_tasks(self, filters: Dict = None) -> List[Dict]:
+        """Get tasks with optional filters"""
+        if filters:
+            return self.db_manager.get_all_tasks(filters.get('status'))
+        return self.db_manager.get_all_tasks()
+```
+
+5. EXPORT FUNCTIONALITY (exports.py)
+=====================================
+
+```python
+import pandas as pd
+from fpdf import FPDF
+import io
+from typing import Dict, List
+
+class ExportManager:
+    """Handles export functionality for summaries and tasks"""
+    
+    def export_summary_to_csv(self, summary_id: str) -> bytes:
+        """Export a meeting summary to CSV format"""
+        try:
+            summary = self.db_manager.get_summary(summary_id)
+            if not summary:
+                raise ValueError(f"Summary not found: {summary_id}")
+            
+            # Prepare data for CSV
+            data = {
+                'Meeting Title': [summary.get('meeting_title', 'Untitled Meeting')],
+                'Summary': [summary.get('summary', '')],
+                'Created At': [summary.get('created_at', '').strftime('%Y-%m-%d %H:%M:%S') if summary.get('created_at') else ''],
+                'Model Used': [summary.get('model_used', '')],
+                'Transcript Length': [summary.get('transcript_length', 0)]
+            }
+            
+            df = pd.DataFrame(data)
+            
+            # Convert to CSV bytes
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False, encoding='utf-8')
+            csv_content = csv_buffer.getvalue().encode('utf-8')
+            csv_buffer.close()
+            
+            logger.info(f"Exported summary {summary_id} to CSV")
+            return csv_content
+            
+        except Exception as e:
+            logger.error(f"Error exporting summary to CSV: {e}")
+            raise
+    
+    def export_meeting_report_to_pdf(self, summary_id: str) -> bytes:
+        """Export complete meeting report to PDF"""
+        try:
+            summary = self.db_manager.get_summary(summary_id)
+            if not summary:
+                raise ValueError(f"Summary not found: {summary_id}")
+            
+            # Get related tasks
+            meeting_id = summary.get('meeting_id')
+            tasks = self.task_manager.get_tasks({'meeting_id': meeting_id}) if meeting_id else []
+            
+            # Create PDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            
+            # Add title
+            pdf.set_font('Arial', 'B', 16)
+            pdf.cell(0, 10, summary.get('meeting_title', 'Untitled Meeting'), 0, 1, 'C')
+            pdf.ln(5)
+            
+            # Add summary content
+            pdf.set_font('Arial', 'B', 12)
+            pdf.cell(0, 8, 'Meeting Summary', 0, 1)
+            pdf.ln(2)
+            
+            pdf.set_font('Arial', '', 10)
+            summary_text = summary.get('summary', '')
+            
+            # Split text into lines
+            lines = summary_text.split('\n')
+            for line in lines:
+                if line.strip():
+                    pdf.multi_cell(0, 5, line.strip())
+                    pdf.ln(1)
+            
+            # Add action items
+            if tasks:
+                pdf.ln(5)
+                pdf.set_font('Arial', 'B', 12)
+                pdf.cell(0, 8, 'Action Items', 0, 1)
+                pdf.ln(2)
+                
+                pdf.set_font('Arial', '', 10)
+                for i, task in enumerate(tasks, 1):
+                    pdf.cell(0, 5, f"{i}. {task.get('task', '')}", 0, 1)
+                    pdf.cell(0, 5, f"   Assignee: {task.get('assignee', 'TBD')}", 0, 1)
+                    pdf.cell(0, 5, f"   Priority: {task.get('priority', 'medium')}", 0, 1)
+                    pdf.cell(0, 5, f"   Deadline: {task.get('deadline', 'TBD')}", 0, 1)
+                    pdf.ln(2)
+            
+            # Convert to bytes
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+            
+            logger.info(f"Exported meeting report {summary_id} to PDF")
+            return pdf_bytes
+            
+        except Exception as e:
+            logger.error(f"Error exporting meeting report to PDF: {e}")
+            raise
+```
+
+6. TRANSCRIPT LOADING (transcript_loader.py)
+=============================================
+
+```python
+import whisper
+import speech_recognition as sr
+import json
+from typing import Dict, Optional
+
+class TranscriptLoader:
+    """Handles loading and processing of various file formats"""
+    
+    def __init__(self):
+        self.whisper_model = whisper.load_model("base")
+        self.recognizer = sr.Recognizer()
+    
+    def load_transcript(self, file_path: str, file_type: str) -> Dict:
+        """Load transcript from various file formats"""
+        try:
+            if file_type == 'text':
+                return self._load_text_file(file_path)
+            elif file_type == 'json':
+                return self._load_json_file(file_path)
+            elif file_type in ['audio', 'video']:
+                return self._load_media_file(file_path)
+            else:
+                raise ValueError(f"Unsupported file type: {file_type}")
+                
+        except Exception as e:
+            logger.error(f"Error loading transcript: {e}")
+            raise
+    
+    def _load_media_file(self, file_path: str) -> Dict:
+        """Load transcript from audio/video file using Whisper"""
+        logger.info(f"Processing media file: {file_path}")
+        
+        # Use Whisper for transcription
+        result = self.whisper_model.transcribe(file_path)
+        
+        return {
+            'transcript': result['text'],
+            'language': result['language'],
+            'segments': result['segments'],
+            'file_path': file_path,
+            'file_type': 'media'
+        }
+    
+    def _load_text_file(self, file_path: str) -> Dict:
+        """Load transcript from text file"""
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+        
+        return {
+            'transcript': content,
+            'file_path': file_path,
+            'file_type': 'text'
+        }
+    
+    def _load_json_file(self, file_path: str) -> Dict:
+        """Load transcript from JSON file"""
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        
+        return {
+            'transcript': data.get('transcript', ''),
+            'metadata': data.get('metadata', {}),
+            'file_path': file_path,
+            'file_type': 'json'
+        }
+```
+
+TECHNICAL INNOVATION HIGHLIGHTS:
+================================
+
+1. **ObjectId Handling**: Proper MongoDB ObjectId conversion for reliable data retrieval
+2. **AI Integration**: Seamless integration with Ollama and Gemma:2b model
+3. **Task Scheduling**: Automated reminder system using APScheduler
+4. **Multi-format Support**: Unified interface for text, audio, and video files
+5. **Export Flexibility**: Both CSV and PDF export options with professional formatting
+6. **Error Handling**: Comprehensive error handling and logging throughout
+7. **Real-time Processing**: Live status updates during processing
+8. **Data Privacy**: Local processing ensures data security
+
+ARCHITECTURE BENEFITS:
+=====================
+- Modular design allows easy extension
+- Database abstraction enables different storage backends
+- AI model abstraction supports multiple language models
+- Export system supports various output formats
+- Task management system integrates with external schedulers
+
+================================================================
+END OF CODE SNIPPETS DOCUMENT
+================================================================
